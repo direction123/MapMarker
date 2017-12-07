@@ -1,0 +1,42 @@
+{
+  "project_info": {
+    "project_number": "784274167172",
+    "firebase_url": "https://mapstation-188305.firebaseio.com",
+    "project_id": "mapstation-188305",
+    "storage_bucket": "mapstation-188305.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:784274167172:android:6a0db0a9ee6110ac",
+        "android_client_info": {
+          "package_name": "direction123.mapmarker"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "784274167172-7a60eu907hcitj797el7k1ik8epbdut8.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCWgTd2ryW5IYO2lP4d-14egJZRQls_nUg"
+        }
+      ],
+      "services": {
+        "analytics_service": {
+          "status": 1
+        },
+        "appinvite_service": {
+          "status": 1,
+          "other_platform_oauth_client": []
+        },
+        "ads_service": {
+          "status": 2
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
