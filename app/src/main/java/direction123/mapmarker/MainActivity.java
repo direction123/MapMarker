@@ -33,7 +33,8 @@ import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 
 public class MainActivity extends AppCompatActivity
-        implements OnMapReadyCallback  {
+        implements OnMapReadyCallback,
+        GoogleMap.OnMyLocationClickListener {
 
     private static final String TAG = MainActivity.class.getSimpleName();
     private GoogleMap mMap;
@@ -86,6 +87,8 @@ public class MainActivity extends AppCompatActivity
         updateLocationUI();
 
         getDeviceLocation();
+
+        mMap.setOnMyLocationClickListener(this);
     }
 
     private void getDeviceLocation() {
@@ -161,5 +164,10 @@ public class MainActivity extends AppCompatActivity
         } catch (SecurityException e)  {
             Log.e("Exception: %s", e.getMessage());
         }
+    }
+
+    @Override
+    public void onMyLocationClick(@NonNull Location location) {
+        Toast.makeText(this, "You are here", Toast.LENGTH_LONG).show();
     }
 }
