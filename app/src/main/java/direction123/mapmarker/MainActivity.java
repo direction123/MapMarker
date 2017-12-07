@@ -2,8 +2,10 @@ package direction123.mapmarker;
 
 import android.Manifest;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.Location;
+import android.net.Uri;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
@@ -27,14 +29,19 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 
 public class MainActivity extends AppCompatActivity
         implements OnMapReadyCallback,
-        GoogleMap.OnMyLocationClickListener {
+        GoogleMap.OnMyLocationClickListener,
+        GoogleMap.OnMapLongClickListener,
+        GoogleMap.OnMarkerClickListener {
 
     private static final String TAG = MainActivity.class.getSimpleName();
     private GoogleMap mMap;
@@ -89,6 +96,7 @@ public class MainActivity extends AppCompatActivity
         getDeviceLocation();
 
         mMap.setOnMyLocationClickListener(this);
+        mMap.setOnMapLongClickListener(this);
     }
 
     private void getDeviceLocation() {
@@ -105,8 +113,6 @@ public class MainActivity extends AppCompatActivity
                                     new LatLng(mLastKnownLocation.getLatitude(),
                                             mLastKnownLocation.getLongitude()), DEFAULT_ZOOM));
                         } else {
-                            Log.d(TAG, "Current location is null. Using defaults.");
-                            Log.e(TAG, "Exception: %s", task.getException());
                             mMap.moveCamera(CameraUpdateFactory
                                     .newLatLngZoom(mDefaultLocation, DEFAULT_ZOOM));
                             mMap.getUiSettings().setMyLocationButtonEnabled(false);
@@ -168,6 +174,91 @@ public class MainActivity extends AppCompatActivity
 
     @Override
     public void onMyLocationClick(@NonNull Location location) {
-        Toast.makeText(this, "You are here", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, "You are here", Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    public void onMapLongClick(final LatLng latLng) {
+        Toast.makeText(this, "long click" + latLng.latitude + ": " + latLng.longitude, Toast.LENGTH_SHORT).show();
+        try {
+            if (mLocationPermissionGranted) {
+                Task<Location> locationResult = mFusedLocationProviderClient.getLastLocation();
+                locationResult.addOnCompleteListener(this, new OnCompleteListener<Location>() {
+                    @Override
+                    public void onComplete(@NonNull Task<Location> task) {
+                        if (task.isSuccessful()) {
+                            // Set the map's camera position to the current location of the device.
+                            mLastKnownLocation = task.getResult();
+                            Location clickedLocation = new Location("clickedLocation");
+                            clickedLocation.setLatitude(latLng.latitude);
+                            clickedLocation.setLongitude(latLng.longitude);
+                            if(mLastKnownLocation.distanceTo(clickedLocation) > 1609.34) {
+                                Toast.makeText(getApplicationContext(), "Gas station too far", Toast.LENGTH_SHORT).show();
+                            } else {
+                                dropMarker(clickedLocation.getLatitude(), clickedLocation.getLongitude());
+                            }
+                        } else {
+
+                        }
+                    }
+                });
+            }
+        } catch (SecurityException e)  {
+            Log.e("Exception: %s", e.getMessage());
+        }
+    }
+
+    private void dropMarker(final double latitude, final double longitude) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+        builder.setTitle(R.string.dialog_title)
+                .setItems(R.array.gas_station, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int which) {
+                        switch (which) {
+                            case 0:
+                                dropMarker(latitude, longitude, 120f);
+                                break;
+                            case 1:
+                                dropMarker(latitude, longitude, 20f);
+                                break;
+                        }
+                    }
+                });
+        AlertDialog dialog = builder.create();
+        dialog.show();
+
+    }
+
+    private void dropMarker(double latitude, double longitude, float color) {
+        mMap.addMarker(new MarkerOptions()
+                .position(new LatLng(latitude, longitude))
+                .icon(BitmapDescriptorFactory.defaultMarker(color)));
+    }
+
+    @Override
+    public boolean onMarkerClick(Marker marker) {
+        Toast.makeText(this, "Marker is clicked", Toast.LENGTH_SHORT).show();
+        try {
+            if (mLocationPermissionGranted) {
+                Task<Location> locationResult = mFusedLocationProviderClient.getLastLocation();
+                locationResult.addOnCompleteListener(this, new OnCompleteListener<Location>() {
+                    @Override
+                    public void onComplete(@NonNull Task<Location> task) {
+                        if (task.isSuccessful()) {
+                            // Set the map's camera position to the current location of the device.
+                            mLastKnownLocation = task.getResult();
+                            String query = "google.navigation:q=" + mLastKnownLocation.getLatitude()
+                                    + "," + mLastKnownLocation.getLongitude();
+                            Uri gmmIntentUri = Uri.parse(query);
+                            Intent mapIntent = new Intent(Intent.ACTION_VIEW, gmmIntentUri);
+                            mapIntent.setPackage("com.google.android.apps.maps");
+                            startActivity(mapIntent);
+                        }
+                    }
+                });
+            }
+        } catch (SecurityException e)  {
+            Log.e("Exception: %s", e.getMessage());
+        }
+        return false;
     }
 }

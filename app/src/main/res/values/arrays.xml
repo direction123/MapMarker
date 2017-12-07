@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="gas_station">
+        <item>Shell</item>
+        <item>Chevron</item>
+    </string-array>
+</resources>

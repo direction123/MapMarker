@@ -3,4 +3,5 @@
     <string name="google_maps_key" translatable="false" templateMergeStrategy="preserve">
         AIzaSyAtzDXuEPE5BIVb1rqpwun8vS5imRAekkA
     </string>
+    <string name="dialog_title">Pick gas station</string>
 </resources>
