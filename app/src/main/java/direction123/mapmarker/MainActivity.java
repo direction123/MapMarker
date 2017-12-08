@@ -92,6 +92,17 @@ public class MainActivity extends AppCompatActivity
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+
+        FirebaseUser currentUser = mAuth.getCurrentUser();
+        if(currentUser != null) {
+            Toast.makeText(this, currentUser.getEmail() + " is logged in MainActivityActivity", Toast.LENGTH_SHORT).show();
+            getSupportActionBar().setTitle(currentUser.getEmail());
+        }
+    }
+
+    @Override
     public void onMapReady(GoogleMap map) {
         mMap = map;
 
