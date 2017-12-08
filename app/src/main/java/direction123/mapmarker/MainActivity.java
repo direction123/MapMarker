@@ -57,6 +57,7 @@ public class MainActivity extends AppCompatActivity
     private static final String GAS_STATION_SHELL = "shell";
     private static final String GAS_STATION_CHEVRON = "chevron";
     private static final Double GAS_STATION_DISTANCE = 160.934; //meter; 1 mile = 1609.34 meters
+    private static final int DEFAULT_ZOOM = 15;
 
     private FirebaseAuth mAuth;
     private DatabaseReference mDatabase;
@@ -68,10 +69,6 @@ public class MainActivity extends AppCompatActivity
 
     private static final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1;
     private boolean mLocationPermissionGranted;
-
-    // A default location (Sydney, Australia) when location permission is not granted.
-    private final LatLng mDefaultLocation = new LatLng(-33.8523341, 151.2106085);
-    private static final int DEFAULT_ZOOM = 15;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -215,10 +212,12 @@ public class MainActivity extends AppCompatActivity
                 if (grantResults.length > 0
                         && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     mLocationPermissionGranted = true;
+                    updateLocationUI();
+                    getDeviceLocation();
                 }
             }
         }
-        updateLocationUI();
+
     }
 
     private void updateLocationUI() {
@@ -229,11 +228,6 @@ public class MainActivity extends AppCompatActivity
             if (mLocationPermissionGranted) {
                 mMap.setMyLocationEnabled(true);
                 mMap.getUiSettings().setMyLocationButtonEnabled(true);
-            } else {
-                mMap.setMyLocationEnabled(false);
-                mMap.getUiSettings().setMyLocationButtonEnabled(false);
-                mLastKnownLocation = null;
-                getLocationPermission();
             }
         } catch (SecurityException e)  {
             Log.e("Exception: %s", e.getMessage());
@@ -253,10 +247,6 @@ public class MainActivity extends AppCompatActivity
                             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
                                     new LatLng(mLastKnownLocation.getLatitude(),
                                             mLastKnownLocation.getLongitude()), DEFAULT_ZOOM));
-                        } else {
-                            mMap.moveCamera(CameraUpdateFactory
-                                    .newLatLngZoom(mDefaultLocation, DEFAULT_ZOOM));
-                            mMap.getUiSettings().setMyLocationButtonEnabled(false);
                         }
                     }
                 });
