@@ -1,6 +1,5 @@
 package direction123.mapmarker;
 
-import android.Manifest;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -16,22 +15,15 @@ import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
-import android.view.View;
-import android.widget.FrameLayout;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
-import com.google.android.gms.location.places.GeoDataClient;
-import com.google.android.gms.location.places.PlaceDetectionClient;
-import com.google.android.gms.location.places.Places;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
-import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
@@ -45,9 +37,9 @@ import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 
 import direction123.mapmarker.Model.GasStation;
 
@@ -55,27 +47,31 @@ public class MainActivity extends AppCompatActivity
         implements OnMapReadyCallback,
         GoogleMap.OnMyLocationClickListener,
         GoogleMap.OnMapLongClickListener,
-        GoogleMap.OnMarkerClickListener {
+        GoogleMap.OnMarkerClickListener,
+        ValueEventListener{
 
     private static final String TAG = MainActivity.class.getSimpleName();
-    private GoogleMap mMap;
+    private static final String KEY_LOCATION = "location";
+    private static final String KEY_GAS_STATION_LIST = "gas_station_list";
+
+    private static final String GAS_STATION_SHELL = "shell";
+    private static final String GAS_STATION_CHEVRON = "chevron";
+    private static final Double GAS_STATION_DISTANCE = 160.934; //meter; 1 mile = 1609.34 meters
+
     private FirebaseAuth mAuth;
     private DatabaseReference mDatabase;
 
+    private GoogleMap mMap;
     private FusedLocationProviderClient mFusedLocationProviderClient;
+    private Location mLastKnownLocation;
+    private ArrayList<GasStation> mGasStationList;
 
-    // A default location (Sydney, Australia) and default zoom to use when location permission is
-    // not granted.
-    private final LatLng mDefaultLocation = new LatLng(-33.8523341, 151.2106085);
-    private static final int DEFAULT_ZOOM = 15;
     private static final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 1;
     private boolean mLocationPermissionGranted;
 
-    // The geographical location where the device is currently located. That is, the last-known
-    // location retrieved by the Fused Location Provider.
-    private Location mLastKnownLocation;
-
-    private static final String KEY_LOCATION = "location";
+    // A default location (Sydney, Australia) when location permission is not granted.
+    private final LatLng mDefaultLocation = new LatLng(-33.8523341, 151.2106085);
+    private static final int DEFAULT_ZOOM = 15;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -84,32 +80,11 @@ public class MainActivity extends AppCompatActivity
         mAuth = FirebaseAuth.getInstance();
         mDatabase = FirebaseDatabase.getInstance().getReference();
         // Read from the database
-        mDatabase.child("gasStations").addValueEventListener(new ValueEventListener() {
-            @Override
-            public void onDataChange(DataSnapshot dataSnapshot) {
-                // This method is called once with the initial value and again
-                // whenever data at this location is updated.
-                Object objects =  dataSnapshot.getValue();
-                for(Object obj: ((HashMap) objects).values()){
-                    HashMap hashMap = (HashMap) obj;
-                    GasStation gasStation = new GasStation(
-                            (String)hashMap.get("userName"),
-                            (String)hashMap.get("latitude"),
-                            (String)hashMap.get("longitude"),
-                            (String)hashMap.get("type")
-                    );
-                }
-            }
-
-            @Override
-            public void onCancelled(DatabaseError error) {
-                // Failed to read value
-                Log.w(TAG, "Failed to read value.", error.toException());
-            }
-        });
+        mDatabase.child("gasStations").addValueEventListener(this);
 
         if (savedInstanceState != null) {
             mLastKnownLocation = savedInstanceState.getParcelable(KEY_LOCATION);
+            mGasStationList = savedInstanceState.getParcelableArrayList(KEY_GAS_STATION_LIST);
         }
         setContentView(R.layout.activity_main);
 
@@ -121,11 +96,46 @@ public class MainActivity extends AppCompatActivity
     }
 
     @Override
+    public void onDataChange(DataSnapshot dataSnapshot) {
+        // This method is called once with the initial value and again
+        // whenever data at this location is updated.
+        Object objects =  dataSnapshot.getValue();
+        mGasStationList = new ArrayList<>();
+        if(objects != null) {
+            for (Object obj : ((HashMap) objects).values()) {
+                if(obj != null) {
+                    HashMap hashMap = (HashMap) obj;
+                    GasStation gasStation = new GasStation(
+                            (String) hashMap.get("userName"),
+                            (String) hashMap.get("latitude"),
+                            (String) hashMap.get("longitude"),
+                            (String) hashMap.get("type")
+                    );
+                    mGasStationList.add(gasStation);
+                }
+            }
+        }
+        displayExistingMarker();  //multiple users synch
+    }
+
+    @Override
+    public void onCancelled(DatabaseError databaseError) {
+        // Failed to read value
+        Log.w(TAG, "Failed to read value.", databaseError.toException());
+    }
+
+    @Override
     protected void onSaveInstanceState(Bundle outState) {
         if (mMap != null) {
             outState.putParcelable(KEY_LOCATION, mLastKnownLocation);
+            outState.putParcelableArrayList(KEY_GAS_STATION_LIST, mGasStationList);
             super.onSaveInstanceState(outState);
         }
+    }
+
+    @Override
+    protected void onRestoreInstanceState(Bundle savedInstanceState) {
+        super.onRestoreInstanceState(savedInstanceState);
     }
 
     @Override
@@ -144,13 +154,13 @@ public class MainActivity extends AppCompatActivity
         mMap = map;
 
         getLocationPermission();
-
         updateLocationUI();
-
         getDeviceLocation();
 
         mMap.setOnMyLocationClickListener(this);
         mMap.setOnMapLongClickListener(this);
+
+        displayExistingMarker();
     }
 
     @Override
@@ -180,32 +190,6 @@ public class MainActivity extends AppCompatActivity
             Intent intent = new Intent(MainActivity.this, LoginActivity.class);
             startActivity(intent);
             finish();
-        }
-    }
-
-    private void getDeviceLocation() {
-        try {
-            if (mLocationPermissionGranted) {
-                Task<Location> locationResult = mFusedLocationProviderClient.getLastLocation();
-                locationResult.addOnCompleteListener(this, new OnCompleteListener<Location>() {
-                    @Override
-                    public void onComplete(@NonNull Task<Location> task) {
-                        if (task.isSuccessful()) {
-                            // Set the map's camera position to the current location of the device.
-                            mLastKnownLocation = task.getResult();
-                            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
-                                    new LatLng(mLastKnownLocation.getLatitude(),
-                                            mLastKnownLocation.getLongitude()), DEFAULT_ZOOM));
-                        } else {
-                            mMap.moveCamera(CameraUpdateFactory
-                                    .newLatLngZoom(mDefaultLocation, DEFAULT_ZOOM));
-                            mMap.getUiSettings().setMyLocationButtonEnabled(false);
-                        }
-                    }
-                });
-            }
-        } catch (SecurityException e)  {
-            Log.e("Exception: %s", e.getMessage());
         }
     }
 
@@ -256,6 +240,32 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
+    private void getDeviceLocation() {
+        try {
+            if (mLocationPermissionGranted) {
+                Task<Location> locationResult = mFusedLocationProviderClient.getLastLocation();
+                locationResult.addOnCompleteListener(this, new OnCompleteListener<Location>() {
+                    @Override
+                    public void onComplete(@NonNull Task<Location> task) {
+                        if (task.isSuccessful()) {
+                            // Set the map's camera position to the current location of the device.
+                            mLastKnownLocation = task.getResult();
+                            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
+                                    new LatLng(mLastKnownLocation.getLatitude(),
+                                            mLastKnownLocation.getLongitude()), DEFAULT_ZOOM));
+                        } else {
+                            mMap.moveCamera(CameraUpdateFactory
+                                    .newLatLngZoom(mDefaultLocation, DEFAULT_ZOOM));
+                            mMap.getUiSettings().setMyLocationButtonEnabled(false);
+                        }
+                    }
+                });
+            }
+        } catch (SecurityException e)  {
+            Log.e("Exception: %s", e.getMessage());
+        }
+    }
+
     @Override
     public void onMyLocationClick(@NonNull Location location) {
         Toast.makeText(this, "You are here", Toast.LENGTH_SHORT).show();
@@ -276,7 +286,7 @@ public class MainActivity extends AppCompatActivity
                             Location clickedLocation = new Location("clickedLocation");
                             clickedLocation.setLatitude(latLng.latitude);
                             clickedLocation.setLongitude(latLng.longitude);
-                            if(mLastKnownLocation.distanceTo(clickedLocation) > 1609.34) {
+                            if(mLastKnownLocation.distanceTo(clickedLocation) > GAS_STATION_DISTANCE) {
                                 Toast.makeText(getApplicationContext(), "Gas station too far", Toast.LENGTH_SHORT).show();
                             } else {
                                 dropMarker(clickedLocation.getLatitude(), clickedLocation.getLongitude());
@@ -299,10 +309,10 @@ public class MainActivity extends AppCompatActivity
                     public void onClick(DialogInterface dialog, int which) {
                         switch (which) {
                             case 0:
-                                dropMarker(latitude, longitude, 120f);
+                                dropMarker(latitude, longitude, GAS_STATION_SHELL);
                                 break;
                             case 1:
-                                dropMarker(latitude, longitude, 20f);
+                                dropMarker(latitude, longitude, GAS_STATION_CHEVRON);
                                 break;
                         }
                     }
@@ -312,21 +322,53 @@ public class MainActivity extends AppCompatActivity
 
     }
 
-    private void dropMarker(double latitude, double longitude, float color) {
-        mMap.addMarker(new MarkerOptions()
-                .position(new LatLng(latitude, longitude))
-                .icon(BitmapDescriptorFactory.defaultMarker(color)));
+    private void dropMarker(double latitude, double longitude, String type) {
+        switch (type) {
+            case GAS_STATION_SHELL:
+                mMap.addMarker(new MarkerOptions()
+                        .position(new LatLng(latitude, longitude))
+                        .icon(BitmapDescriptorFactory.fromResource(R.drawable.shell)));
+                break;
+            case GAS_STATION_CHEVRON:
+                mMap.addMarker(new MarkerOptions()
+                        .position(new LatLng(latitude, longitude))
+                        .icon(BitmapDescriptorFactory.fromResource(R.drawable.chevron)));
+                break;
+        }
 
         FirebaseUser currentUser = mAuth.getCurrentUser();
         writeNewGasStation(currentUser.getEmail(), String.valueOf(latitude),
-                String.valueOf(longitude), "shell");
+                String.valueOf(longitude), type);
+    }
+
+    private void displayExistingMarker() {
+        if(mMap != null) {
+            if(mGasStationList != null && mGasStationList.size() != 0) {
+                for(int i = 0; i < mGasStationList.size(); i++) {
+                    GasStation gasStation = mGasStationList.get(i);
+                    switch (gasStation.type) {
+                        case GAS_STATION_SHELL:
+                            mMap.addMarker(new MarkerOptions()
+                                    .position(new LatLng(Double.parseDouble(gasStation.latitude),
+                                            Double.parseDouble(gasStation.longitude)))
+                                    .icon(BitmapDescriptorFactory.fromResource(R.drawable.shell)));
+                            break;
+                        case GAS_STATION_CHEVRON:
+                            mMap.addMarker(new MarkerOptions()
+                                    .position(new LatLng(Double.parseDouble(gasStation.latitude),
+                                            Double.parseDouble(gasStation.longitude)))
+                                    .icon(BitmapDescriptorFactory.fromResource(R.drawable.chevron)));
+                            break;
+                    }
+                }
+            }
+        }
+
     }
 
     private void writeNewGasStation(String userName, String latitude, String longitude, String type) {
-        // Create new post at /user-posts/$userid/$postid and at
-        // /posts/$postid simultaneously
         String key = mDatabase.child("gasStations").push().getKey();
-        GasStation gasStation = new GasStation(userName, longitude, latitude, type);
+        GasStation gasStation = new GasStation(userName, latitude, longitude, type);
         Map<String, Object> gasStationValues = gasStation.toMap();
 
         Map<String, Object> childUpdates = new HashMap<>();
